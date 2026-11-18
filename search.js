@@ -102,11 +102,14 @@
     return weights;
   }
 
+  function norm(x) { return String(x).toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim(); }
+
   function search(idx, query, opts) {
     opts = opts || {};
     var qt = tokens(query);
     if (!qt.length) return { results: [], confident: false, qt: qt };
     var weights = expand(qt);
+    var qnorm = norm(query);
     var k1 = 1.2, b = 0.75, res = [];
 
     idx.docs.forEach(function (d) {
@@ -130,6 +133,8 @@
         if (j > best) best = j;
       });
       s += 7 * best;
+      if (best === 1) s += 12;   // the user's words are exactly one of the entry's own curated questions
+      if (d.e.questions && d.e.questions.some(function (x) { return norm(x) === qnorm; })) s += 25;   // the identical sentence
       // coverage of the user's own words (not synonyms)
       var hit = 0;
       qt.forEach(function (t) { if (d.present.has(t)) hit++; });

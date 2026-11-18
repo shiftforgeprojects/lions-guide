@@ -267,9 +267,10 @@
   }
   var TYPE_WORD = { video: "video", mp4: "video", pdf: "PDF", pptx: "Presentation", ppt: "Presentation", docx: "Word", doc: "Word", xlsx: "Excel", jpg: "Image", page: "Web page", ai: "Design file" };
   function libSearch(lib, q, n) {
+    q = q.replace(/\bsuspend(s|ed|ing)?\b/gi, "suspension");
     var qt = S.tokens(q), browse = /\b(documents?|videos?|forms?|library|downloads?|resources?|brochures?|flyers?|presentations?|applications?|guides?|handbooks?)\b/i.test(q);
     var want = /\bvideos?\b/i.test(q) ? "video" : null;
-    var rare = qt.filter(function (t) { return !/^(document|video|form|librari|download|resourc|brochur|flyer|present|applic|guid|handbook|show|find|need|want|get|lion|club)/.test(t); });
+    var rare = qt.filter(function (t) { return !/^(document|video|form|librari|download|resourc|brochur|flyer|present|applic|guid|handbook|show|find|need|want|get|lion|club)/.test(t) && t !== "member"; });
     var out = [];
     lib.forEach(function (x) {
       if (want && x.y !== "mp4") return;
@@ -358,22 +359,98 @@
     return (state.mode === "member" ? m : n).map(function (q) { return askChip(q.replace(/\?$/, "").toLowerCase(), q); });
   }
 
+  var ROLESP = null;
+  function loadRoles() {
+    if (!ROLESP) ROLESP = fetch("roles.json").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; });
+    return ROLESP;
+  }
+  function tile(label, sub, fn) {
+    return h("button", { class: "tile", type: "button", onclick: fn }, [h("b", { text: label }), sub ? h("small", { text: sub }) : null]);
+  }
+  function roleHub(r) {
+    addUser(r.label);
+    loadLib().then(function (lib) {
+      var byT = {}; lib.forEach(function (x) { byT[x.t] = x; });
+      var kids = [h("span", { class: "cat", text: "Your role" }), h("h2", { text: r.label }), h("p", { text: r.blurb })];
+      kids.push(h("div", { class: "grp", text: "Ask me" })); kids.push(chips(r.q.map(function (q) { return askChip(q); })));
+      var pg = r.pages.map(function (t) { return byT[t]; }).filter(Boolean), dc = r.docs.map(function (t) { return byT[t]; }).filter(Boolean);
+      var card = h("article", { class: "card hub" }, kids);
+      if (pg.length) { card.appendChild(h("div", { class: "grp", text: "Read on lionsclubs.org" })); pg.forEach(function (x) { card.appendChild(h("a", { class: "libitem", href: x.u, target: "_blank", rel: "noopener" }, [h("b", { text: x.t }), h("p", { text: x.s })])); }); }
+      if (dc.length) { card.appendChild(h("div", { class: "grp", text: "Forms, guides and documents" })); dc.forEach(function (x) { card.appendChild(h("a", { class: "libitem", href: LIBU + x.i, target: "_blank", rel: "noopener" }, [h("b", { text: x.t }), h("div", { class: "where", text: [TYPE_WORD[x.y] || x.y, x.p ? x.p + " pp" : null, x.d].filter(Boolean).join(" · ") })])); }); }
+      addBot([card, chips([{ label: "Choose another role", run: welcome }])]);
+    });
+  }
+  function publicHome() {
+    var stat = function (n, l) { return h("div", { class: "stat" }, [h("b", { text: n }), h("small", { text: l })]); };
+    var hero = h("article", { class: "card hero" }, [
+      h("span", { class: "kicker", text: "Lions Clubs International" }),
+      h("h1", { text: "Serve your community. Join a global family." }),
+      h("p", { text: "Ordinary people, extraordinary service. Find out in plain words what Lions do, how to join, and what it takes. Ask me anything." }),
+      h("div", { class: "cta" }, [
+        h("button", { class: "btn gold", type: "button", text: "How do I join?", onclick: function () { ask("How do I join a Lions club?"); } }),
+        h("button", { class: "btn ghost", type: "button", text: "What do Lions do?", onclick: function () { ask("What do Lions actually do?"); } })
+      ]),
+      h("div", { class: "stats" }, [stat("1.4 million", "members"), stat("200+", "countries and areas"), stat("1917", "founded in Chicago"), stat("100M+", "people served every year")])
+    ]);
+    var why = h("article", { class: "card" }, [
+      h("span", { class: "cat", text: "What Lions care about" }),
+      h("div", { class: "tiles" }, [
+        ["\ud83d\udc41\ufe0f", "Vision", "Screening, eye banks and eyeglasses", "Lions vision"],
+        ["\ud83c\udf5a", "Hunger", "Food for families in need", "Lions hunger"],
+        ["\ud83e\ude78", "Diabetes", "Awareness, prevention and care", "Lions diabetes"],
+        ["\ud83c\udf97\ufe0f", "Childhood cancer", "Support for children and families", "Lions childhood cancer"],
+        ["\ud83c\udf33", "Environment", "Cleaner, greener communities", "Lions environment"],
+        ["\ud83e\udd1d", "All causes", "See everything Lions work on", "What are the global causes?"]
+      ].map(function (t) { return h("button", { class: "tile cause", type: "button", onclick: function () { ask(t[3]); } }, [h("span", { class: "ico", text: t[0] }), h("b", { text: t[1] }), h("small", { text: t[2] })]); }))
+    ]);
+    var me = h("article", { class: "card" }, [
+      h("span", { class: "cat", text: "Is Lions for me?" }),
+      h("div", { class: "tiles" }, [
+        ["How to join", "Find a club and take the first step", "How do I join a Lions club?"],
+        ["What it costs", "Dues and fees, in plain words", "How much does it cost to join?"],
+        ["For young people", "Leo clubs and the Cub program", "How do I start a Leo club?"],
+        ["Who is who", "Club, district and International titles", "What are the Lions officer titles at each level?"],
+        ["Our foundation", "LCIF and the grants it funds", "What is LCIF?"],
+        ["Our story", "From Chicago in 1917 to today", "What is the history of Lions?"]
+      ].map(function (t) { return tile(t[0], t[1], function () { ask(t[2]); }); })),
+      chips([{ label: "Forms, guides and videos", run: openLibrary }, { label: "Browse all topics", run: openTopics }, { label: "2-minute tour", run: startTour }]),
+      h("p", { class: "small", id: "ver", text: "Version " + (KB.meta.version || "?") + " · " + (KB.meta.build || KB.meta.built || "") }),
+      (function () { var c = KB.meta.checked; if (!c) return null; var days = Math.floor((Date.now() - new Date(c + "T00:00:00Z").getTime()) / 864e5); return h("p", { class: "small", id: "fresh", text: "Information last checked: " + c + (days > 31 ? ". This is over a month old, so please confirm important details on lionsclubs.org." : ".") }); })()
+    ]);
+    addBot([hero, why, me]);
+    chat.scrollTop = 0;
+  }
   function welcome() {
     chat.textContent = "";
     state.last = null;
-    addBot([h("article", { class: "card" }, [
-      h("span", { class: "cat", text: "Welcome" }),
-      h("h2", { text: "Understand Lionism, in plain words" }),
-      h("p", { text: "Ask about Lions Clubs International: what it is, what Lions do, how to join, and the rules and meetings behind it. Every answer shows where it comes from." }),
-      h("p", { class: "small", text: "Always confirm important decisions at lionsclubs.org." }),
-      h("p", { class: "small", id: "ver", text: "Version " + (KB.meta.version || "?") + " · " + (KB.meta.build || KB.meta.built || "") }),
-      (function () {
-        var c = KB.meta.checked; if (!c) return null;
-        var days = Math.floor((Date.now() - new Date(c + "T00:00:00Z").getTime()) / 864e5), old = days > 31;
-        return h("p", { class: "small", id: "fresh", text: "Information last checked: " + c + (old ? ". This is over a month old, so please confirm important details on lionsclubs.org." : ".") });
-      })(),
-      chips([{ label: "Take the 2-minute tour", primary: true, run: startTour }].concat(starters()))
-    ])]);
+    var member = state.mode === "member";
+    if (!member) return publicHome();
+    var head = [h("span", { class: "cat", text: member ? "For members" : "Welcome" }),
+      h("h2", { text: member ? "Choose your role" : "Welcome to Lions" }),
+      h("p", { text: member ? "Pick your level and role, from your club up to International. You get the questions, official pages and forms for that job. New to all this? Start with the first box. Or type any question below." : "Lions Clubs International is a global network of volunteers serving their communities. Start here, or type any question below." })];
+    var grid = h("div", { class: member ? "levels" : "tiles" }, []);
+    if (member) {
+      loadRoles().then(function (rs) {
+        var cur = null, g = null;
+        rs.forEach(function (r) {
+          if (r.lv !== cur) { cur = r.lv; grid.appendChild(h("div", { class: "grp lvl", text: cur })); g = h("div", { class: "tiles" }, []); grid.appendChild(g); }
+          g.appendChild(tile(r.label, r.blurb, function () { roleHub(r); }));
+        });
+      });
+    } else {
+      [["What is Lions?", "Who we are and how we are organised", "What is Lions Clubs International?"],
+       ["What Lions do", "Vision, hunger, diabetes, children and more", "What do Lions actually do?"],
+       ["Join a club", "Who can join and how", "How do I join a Lions club?"],
+       ["What it costs", "Dues and fees", "How much does it cost to join?"],
+       ["Young people", "Leo clubs and the Cub program", "How do I start a Leo club?"],
+       ["Who is who", "Club, district and International titles", "What are the Lions officer titles at each level?"],
+       ["Our foundation", "LCIF and the grants it funds", "What is LCIF?"]].forEach(function (t) { grid.appendChild(tile(t[0], t[1], function () { ask(t[2]); })); });
+    }
+    var foot = [h("div", { class: "grp", text: "Also" }), chips([{ label: "Forms, guides and videos", run: openLibrary }, { label: "Browse all topics", run: openTopics }, { label: "2-minute tour", run: startTour }]),
+      h("p", { class: "small", id: "ver", text: "Version " + (KB.meta.version || "?") + " · " + (KB.meta.build || KB.meta.built || "") })];
+    var c = KB.meta.checked;
+    if (c) { var days = Math.floor((Date.now() - new Date(c + "T00:00:00Z").getTime()) / 864e5); foot.push(h("p", { class: "small", id: "fresh", text: "Information last checked: " + c + (days > 31 ? ". This is over a month old, so please confirm important details on lionsclubs.org." : ".") })); }
+    addBot([h("article", { class: "card" }, head.concat([grid]).concat(foot))]);
     chat.scrollTop = 0;
   }
 
