@@ -11,6 +11,7 @@
     get: function (k, d) { try { var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
     set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   };
+  if (/[?&]embed=1\b/.test(location.search)) document.documentElement.classList.add("embed");
   var state = { mode: store.get("lg_mode", "new"), last: null, tour: -1, docIndex: null, docCache: {}, deferredInstall: null, version: null };
 
   /* ---------- tiny DOM helper (text only, never innerHTML, so content can't inject markup) ---------- */
@@ -510,6 +511,7 @@
       row("Take the 2-minute tour", startTour),
       row("Browse all topics", openTopics),
       row("Library: forms, guides, videos", openLibrary),
+      row("Add the chat bubble to a website", function () { window.open("bubble.html", "_blank", "noopener"); }),
       h("div", { class: "grp", text: "Text size" }),
       h("div", { class: "size" }, [16, 17, 19, 22].map(function (p, i) { return h("button", { type: "button", text: ["Small", "Normal", "Large", "Largest"][i], onclick: function () { setSize(p); } }); }))
     ]);

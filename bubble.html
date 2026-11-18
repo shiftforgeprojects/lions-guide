@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lions Guide: two ways to use it</title>
+<style>
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#122f5a;background:#f1f5fb}
+header{background:#003c73;color:#fff;padding:22px 20px}header h1{margin:0 0 6px;font-size:26px}header p{margin:0;color:#dbe8fa;max-width:640px}
+main{max-width:860px;margin:0 auto;padding:20px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:6px 0 22px}
+.box{background:#fff;border:1px solid #d3deef;border-radius:12px;padding:16px}.box h2{margin:0 0 6px;font-size:18px}.box p{margin:0 0 12px}
+.btn{display:inline-block;background:#ffcf06;color:#2a1b00;font-weight:700;text-decoration:none;padding:11px 18px;border-radius:999px}
+code{display:block;background:#0e2447;color:#dfe9fb;padding:12px;border-radius:8px;font-size:13px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+.mock{background:#fff;border:1px dashed #9db3d6;border-radius:12px;padding:16px;color:#33445f}
+</style></head><body>
+<header><h1>Lions Guide: two ways to use it</h1><p>The same guide, with the same answers, as a full page or as a chat bubble on any website.</p></header>
+<main>
+<div class="two">
+<div class="box"><h2>1. The full guide</h2><p>Role journeys, causes, forms and videos on its own page. Best on a phone.</p><a class="btn" href="index.html">Open the full guide</a></div>
+<div class="box"><h2>2. The chat bubble</h2><p>Look at the bottom right of this page and click the yellow bubble. It opens the same guide without leaving the page.</p></div>
+</div>
+<div class="box"><h2>Put the bubble on a website</h2><p>Paste this one line before the end of the page:</p><code id="snip"></code></div>
+<p></p>
+<div class="mock"><b>Example club website</b><p>This block stands in for a Lions club's own website. Visitors can read it as normal, and the bubble stays in the corner, ready to answer their questions about Lions.</p></div>
+</main>
+<script>document.getElementById("snip").textContent='<script src="'+location.href.replace(/bubble\.html.*$/,"")+'bubble.js" defer><\/script>';</script>
+<script src="bubble.js" defer></script>
+</body></html>
