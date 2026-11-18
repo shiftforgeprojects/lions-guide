@@ -392,16 +392,25 @@
       ]),
       h("div", { class: "stats" }, [stat("1.4 million", "members"), stat("200+", "countries and areas"), stat("1917", "founded in Chicago"), stat("100M+", "people served every year")])
     ]);
-    var why = h("article", { class: "card" }, [
-      h("span", { class: "cat", text: "What Lions care about" }),
-      h("div", { class: "tiles" }, [
-        ["\ud83d\udc41\ufe0f", "Vision", "Screening, eye banks and eyeglasses", "Lions vision"],
-        ["\ud83c\udf5a", "Hunger", "Food for families in need", "Lions hunger"],
-        ["\ud83e\ude78", "Diabetes", "Awareness, prevention and care", "Lions diabetes"],
-        ["\ud83c\udf97\ufe0f", "Childhood cancer", "Support for children and families", "Lions childhood cancer"],
-        ["\ud83c\udf33", "Environment", "Cleaner, greener communities", "Lions environment"],
-        ["\ud83e\udd1d", "All causes", "See everything Lions work on", "What are the global causes?"]
-      ].map(function (t) { return h("button", { class: "tile cause", type: "button", onclick: function () { ask(t[3]); } }, [h("span", { class: "ico", text: t[0] }), h("b", { text: t[1] }), h("small", { text: t[2] })]); }))
+    var causes = [
+      ["Childhood cancer", "Support for the needs of children and families affected by childhood cancer.", "Lions childhood cancer", "\ud83c\udf97\ufe0f", "#e9b400,#7a4d00", "#fcc21b", "#1a1a1a"],
+      ["Diabetes", "Working to reduce how common diabetes is and to improve life for people living with it.", "Lions diabetes", "\ud83e\udd32", "#bfe3f5,#005f9e", "#4aa3ff", "#0b2545"],
+      ["Disaster relief", "Meeting immediate needs and giving long-term support after natural disasters.", "Lions disaster relief", "\u26c8\ufe0f", "#a79ed6,#1f3490", "#0b3a9c", "#fff"],
+      ["Environment", "Protecting the environment for healthier communities and a more sustainable world.", "Lions environment", "\ud83c\udf3f", "#7cc243,#007a5a", "#a3d065", "#10321f"],
+      ["Humanitarian", "Finding the world's most crucial needs and giving aid where it is needed most.", "Lions humanitarian", "\ud83e\udd1d", "#f08a24,#7a1d1d", "#ff6b4a", "#2a0a00"],
+      ["Hunger", "Improving food security and access to nutritious food for people who go without.", "Lions hunger", "\ud83c\udf72", "#f7c36a,#d84a00", "#fb8c3a", "#2a1200"],
+      ["Vision", "Helping prevent avoidable blindness and improve life for people who are blind or visually impaired.", "Lions vision", "\ud83d\udc41\ufe0f", "#d6b0d9,#3d0f48", "#7b3a8a", "#fff"],
+      ["Youth", "Supporting young people to make positive choices and become the next generation of leaders.", "Lions youth programs", "\ud83e\uddd1\u200d\ud83e\udd1d\u200d\ud83e\uddd1", "#8fbf8f,#00a3b5", "#00a3b5", "#fff"]
+    ];
+    var why = h("article", { class: "card causes" }, [
+      h("h2", { text: "Our global causes" }), h("i", { class: "rule" }),
+      h("div", { class: "cgrid" }, causes.map(function (c) {
+        var g = c[4].split(",");
+        return h("button", { class: "cause", type: "button", onclick: function () { ask(c[2]); } }, [
+          h("span", { class: "chead", style: "background:linear-gradient(135deg," + g[0] + "," + g[1] + ")" }, [h("span", { class: "cico", text: c[3] }), h("span", { class: "ctab", style: "background:" + c[5] + ";color:" + c[6], text: "Learn more" })]),
+          h("b", { text: c[0] }), h("small", { text: c[1] })
+        ]);
+      }))
     ]);
     var me = h("article", { class: "card" }, [
       h("span", { class: "cat", text: "Is Lions for me?" }),
@@ -420,8 +429,8 @@
     addBot([hero, why, me]);
     chat.scrollTop = 0;
   }
-  function welcome() {
-    chat.textContent = "";
+  function welcome(keep) {
+    if (keep !== true) chat.textContent = "";
     state.last = null;
     var member = state.mode === "member";
     if (!member) return publicHome();
@@ -544,7 +553,7 @@
   segBtns.forEach(function (b) {
     b.addEventListener("click", function () {
       state.mode = b.dataset.mode; store.set("lg_mode", state.mode); paintMode();
-      if (chat.querySelectorAll(".msg").length <= 1) welcome();
+      welcome(chat.querySelectorAll(".msg").length > 1);
     });
   });
   paintMode();
