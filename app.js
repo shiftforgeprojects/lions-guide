@@ -639,6 +639,8 @@
 
   window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); state.deferredInstall = e; });
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+    var hadSW = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", function () { if (hadSW) location.reload(); });
     navigator.serviceWorker.register("sw.js").catch(function () {});
   }
 
