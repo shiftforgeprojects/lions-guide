@@ -135,11 +135,15 @@
   /* ---------- documents lane ---------- */
   function loadDoc(id) {
     if (state.docCache[id]) return state.docCache[id];
-    state.docCache[id] = fetch("d/" + id + ".json").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+    var sh = 0; for (var i = 0; i < id.length; i++) sh += id.charCodeAt(i); sh = sh % 8;
+    state.shards = state.shards || {};
+    state.shards[sh] = state.shards[sh] || fetch("dd" + sh + ".json").then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; });
+    state.docCache[id] = state.shards[sh].then(function (m) { return m[id] || null; });
     return state.docCache[id];
   }
   function docLane(q) {
     var di = state.docIndex;
+    if (/\b(weather|forecast|stocks?|recipes?|bake|cake|poem|joke|lyrics|bitcoin|crypto|horoscope|laptop|iphone|prime minister|cricket|football|movie|movies)\b/i.test(q) && !/\blions?\b/i.test(q)) return Promise.resolve([]);
     if (!di || !di.docs || !di.docs.length) return Promise.resolve([]);
     var ds = S.docSearch(di, q, 4);
     if (!ds.docs.length) return Promise.resolve([]);
@@ -152,6 +156,15 @@
   }
 
   /* ---------- conversation ---------- */
+  function preferDocs(q, res, ps) {
+    var t0 = res.results[0];
+    if (!t0 || !ps.length || t0.qsim >= 1) return false;
+    var qt = S.tokens(q), tt = S.tokens(ps[0].chunk.doc.t);
+    var titleHit = tt.length > 0 && tt.every(function (t) { return qt.indexOf(t) >= 0; });
+    if (titleHit) return true;
+    if (t0.qsim >= 0.6) return false;
+    return ps[0].coverage > t0.coverage + 0.15 || (t0.qsim < 0.4 && ps[0].coverage >= t0.coverage && ps[0].coverage >= 0.99);
+  }
   function ask(q) {
     q = String(q || "").trim(); if (!q) return;
     addUser(q);
@@ -179,30 +192,36 @@
     // A reference back to the last answer ("who elects them", "and the fees?", "what about for students") is read in that topic's context.
     if (state.last && S.tokens(q).length <= 6) {
       var pron = /\b(them|it|they|those|these|that|this|there|their)\b/i.test(q), lead = /^\s*(and|also|what about|how about|then|so)\b/i.test(q);
-      if (pron || (lead && !res.confident)) {
+      var weak = !res.confident || !res.results.length || res.results[0].qsim < 0.5;   // a question that already matches an answer well is not a follow-up
+      if ((pron && weak) || (lead && !res.confident)) {
         var r3 = S.search(idx, q + " " + state.last.title, { mode: state.mode });
         if (r3.confident || r3.tentative) res = r3;
       }
     }
     var msg = addBot([]);
     var top = (res.confident || res.tentative) ? res.results[0].entry : null;
-    if (top) {
-      state.last = top;
-      if (!res.confident) {
-        log({ type: "tentative", q: q, id: top.id });
-        msg.appendChild(h("div", { class: "lead", text: "This is the closest match I have. Tell me if it isn't what you meant." }));
-      }
-      msg.appendChild(entryCard(top));
-      var also = res.results.slice(1, 3).filter(function (r) { return r.score > res.results[0].score * 0.6 && r.coverage >= 0.5; });
-      if (also.length) {
-        msg.appendChild(h("div", { class: "lead", text: "Related to your question" }));
-        also.slice(0, 1).forEach(function (r) { msg.appendChild(entryCard(r.entry)); });
-      }
-    }
-    docLane(q).then(function (ps) {
+    Promise.all([docLane(q), loadLib()]).then(function (both) {
+      var ps = both[0], libHits = libSearch(both[1], q, 3);
+      // The real Lions page wins when it matches the question better than a written answer does.
+      if (top && preferDocs(q, res, ps)) top = null;
+      // A form, guide or page whose title matches the question beats a weak written answer.
+      if (top && res.results[0].qsim < 0.5 && libHits.length && libHits[0].sc >= 6) top = null;
+      if (top) {
+        state.last = top;
+        if (!res.confident) {
+          log({ type: "tentative", q: q, id: top.id });
+          msg.appendChild(h("div", { class: "lead", text: "This is the closest match I have. Tell me if it isn't what you meant." }));
+        }
+        msg.appendChild(entryCard(top));
+        var also = res.results.slice(1, 3).filter(function (r) { return r.score > res.results[0].score * 0.6 && r.coverage >= 0.5; });
+        if (also.length) {
+          msg.appendChild(h("div", { class: "lead", text: "Related to your question" }));
+          also.slice(0, 1).forEach(function (r) { msg.appendChild(entryCard(r.entry)); });
+        }
+      } else if (ps.length) state.last = null;
       if (ps.length) {
         if (top) {   // a written answer already exists: keep the exact passages one tap away so the phone screen stays short
-          var det = h("details", { class: "card docs" }, [h("summary", { text: "What the documents say (" + ps.length + ")" })]);
+          var det = h("details", { class: "card docs", open: "" }, [h("summary", { text: "What the documents say (" + ps.length + ")" })]);
           det.appendChild(passageCards(ps, true));
           msg.appendChild(det);
         } else {
@@ -216,7 +235,7 @@
         fallbackCard(q, res.results).forEach(function (n) { msg.appendChild(n); });
       }
       if (!top && ps.length) msg.appendChild(chips(starters().slice(0, 3)));
-      quick(q, msg, res, top);
+      if (!top && ps.length) pquick(msg, ps);
       generate(q, msg, res, top, ps);
       libLane(q, msg, !!top).then(function (n) {
         if (!top && !ps.length && n) { var fb = msg.querySelector(".card h2"); if (fb && /couldn't find/.test(fb.textContent)) fb.closest("article").remove(); }
@@ -256,6 +275,18 @@
     if (!best.length) best = [first];
     best.sort(function (a, b) { return a.i - b.i; });
     var say = h("article", { class: "card gen quick" }, [h("p", { text: best.map(function (x) { return x.s; }).join(" ") })]);
+    msg.insertBefore(say, msg.firstChild);
+    tuck(msg, say);
+  }
+
+  // No written answer, but the real Lions pages have one: say it in two sentences, name the page, keep the full passages one tap away.
+  function pquick(msg, ps) {
+    var p = ps[0], c = p.chunk, ss = sentences(p.excerpt || "").filter(function (x) { return x.length > 25; }), sn = ss.slice(0, 2).join(" ") || p.excerpt;
+    if (!sn) return;
+    var say = h("article", { class: "card gen quick" }, [
+      h("p", { text: sn }),
+      h("div", { class: "srcs" }, [h("a", { class: "src", href: c.doc.u, target: "_blank", rel: "noopener" }, [badge(c.doc.tier), h("span", { text: c.doc.t + " on lionsclubs.org" })])])
+    ]);
     msg.insertBefore(say, msg.firstChild);
     tuck(msg, say);
   }
@@ -423,14 +454,14 @@
         ["Our foundation", "LCIF and the grants it funds", "What is LCIF?"],
         ["Our story", "From Chicago in 1917 to today", "What is the history of Lions?"]
       ].map(function (t) { return tile(t[0], t[1], function () { ask(t[2]); }); })),
-      chips([{ label: "Forms, guides and videos", run: openLibrary }, { label: "Browse all topics", run: openTopics }, { label: "2-minute tour", run: startTour }]),
-      h("p", { class: "small", id: "ver", text: "Version " + (KB.meta.version || "?") + " · " + (KB.meta.build || KB.meta.built || "") }),
-      (function () { var c = KB.meta.checked; if (!c) return null; var days = Math.floor((Date.now() - new Date(c + "T00:00:00Z").getTime()) / 864e5); return h("p", { class: "small", id: "fresh", text: "Information last checked: " + c + (days > 31 ? ". This is over a month old, so please confirm important details on lionsclubs.org." : ".") }); })()
+      chips([{ label: "Forms, guides and videos", run: openLibrary }, { label: "Browse all topics", run: openTopics }, { label: "2-minute tour", run: startTour }, { label: "See the chat bubble", run: function () { window.open("bubble.html", "_blank", "noopener"); } }])
     ]);
     addBot([hero, why, me]);
     chat.scrollTop = 0;
   }
+  function stampVersion() { var v = document.getElementById("ver"); if (!v) return; var c = KB.meta.checked; v.textContent = "v" + (KB.meta.version || "?") + (c ? "\nchecked " + c : ""); }
   function welcome(keep) {
+    stampVersion();
     if (keep !== true) chat.textContent = "";
     state.last = null;
     var member = state.mode === "member";
@@ -456,10 +487,7 @@
        ["Who is who", "Club, district and International titles", "What are the Lions officer titles at each level?"],
        ["Our foundation", "LCIF and the grants it funds", "What is LCIF?"]].forEach(function (t) { grid.appendChild(tile(t[0], t[1], function () { ask(t[2]); })); });
     }
-    var foot = [h("div", { class: "grp", text: "Also" }), chips([{ label: "Forms, guides and videos", run: openLibrary }, { label: "Browse all topics", run: openTopics }, { label: "2-minute tour", run: startTour }]),
-      h("p", { class: "small", id: "ver", text: "Version " + (KB.meta.version || "?") + " · " + (KB.meta.build || KB.meta.built || "") })];
-    var c = KB.meta.checked;
-    if (c) { var days = Math.floor((Date.now() - new Date(c + "T00:00:00Z").getTime()) / 864e5); foot.push(h("p", { class: "small", id: "fresh", text: "Information last checked: " + c + (days > 31 ? ". This is over a month old, so please confirm important details on lionsclubs.org." : ".") })); }
+    var foot = [h("div", { class: "grp", text: "Also" }), chips([{ label: "Forms, guides and videos", run: openLibrary }, { label: "Browse all topics", run: openTopics }, { label: "2-minute tour", run: startTour }, { label: "See the chat bubble", run: function () { window.open("bubble.html", "_blank", "noopener"); } }]),];
     addBot([h("article", { class: "card" }, head.concat([grid]).concat(foot))]);
     chat.scrollTop = 0;
   }
@@ -542,6 +570,40 @@
     openSheet("Review log", body);
   }
 
+  /* ---------- welcome notice: shown each time the app opens ---------- */
+  function disclaimer(done) {
+    var embed = /[?&]embed=1\b/.test(location.search), forced = /[?&]disclaimer=1\b/.test(location.search);
+    var seen = false; try { seen = sessionStorage.getItem("lg_ok") === "1"; } catch (e) {}
+    if ((seen && !forced) || (navigator.webdriver && !forced)) return done();
+    var link = function (t) { return h("a", { href: "https://www.lionsclubs.org/", target: "_blank", rel: "noopener", text: t || "www.lionsclubs.org" }); };
+    var ok = h("button", { class: "btn gold", type: "button", text: "OK", id: "dOk" });
+    var cancel = h("button", { class: "btn ghost", type: "button", text: "Cancel", id: "dCancel" });
+    var box = h("div", { class: "dbox", role: "dialog", "aria-modal": "true", "aria-labelledby": "dTitle" }, [
+      h("img", { class: "dlogo", src: "logo.png", alt: "" }),
+      h("h2", { id: "dTitle", text: "Before you begin" }),
+      h("p", { text: "Welcome! Lions Guide was created to help people who are curious about Lions, and Lions members, learn about Lionism. It was developed by Ln. Mukesh Kumar Pandey (District 317F)." }),
+      h("p", {}, ["All the information, images and videos in this guide come from the official Lions Clubs International website, ", link("https://www.lionsclubs.org/"), ". They are used only to make learning about Lionism easy for everyone."]),
+      h("p", {}, ["If anything is unclear, or you would like to double-check a detail, please visit ", link("https://www.lionsclubs.org/"), " to confirm it. That website is always the final authority."]),
+      h("p", { class: "dask", text: "Press OK to continue to the guide, or Cancel to close it." }),
+      h("div", { class: "dbtns" }, [ok, cancel])
+    ]);
+    var ov = h("div", { class: "dover", id: "disclaimer" }, [box]); document.body.appendChild(ov);
+    ok.focus();
+    ok.addEventListener("click", function () { try { sessionStorage.setItem("lg_ok", "1"); } catch (e) {} ov.remove(); done(); });
+    cancel.addEventListener("click", function () {
+      if (embed && window.parent !== window) { try { window.parent.postMessage("lg-close", "*"); } catch (e) {} ov.remove(); showClosed(); return; }
+      try { window.close(); } catch (e) {}
+      showClosed();
+    });
+    ov.addEventListener("keydown", function (e) { if (e.key === "Tab") { var f = [ok, cancel, box.querySelectorAll("a")[0], box.querySelectorAll("a")[1]].filter(Boolean), i = f.indexOf(document.activeElement); e.preventDefault(); f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus(); } });
+  }
+  function showClosed() {
+    var old = document.getElementById("disclaimer"); if (old) old.remove();
+    document.body.textContent = "";
+    var again = h("button", { class: "btn gold", type: "button", text: "Open the guide again", onclick: function () { try { sessionStorage.removeItem("lg_ok"); } catch (e) {} location.reload(); } });
+    document.body.appendChild(h("div", { class: "dclosed" }, [h("h2", { text: "The Lions Guide is closed" }), h("p", { text: "Thank you for visiting. You can close this tab now." }), again]));
+  }
+
   /* ---------- wiring ---------- */
   var form = document.getElementById("form"), input = document.getElementById("q"), send = document.getElementById("send");
   form.addEventListener("submit", function (ev) { ev.preventDefault(); var v = input.value; input.value = ""; send.disabled = true; input.blur(); ask(v); });
@@ -595,7 +657,7 @@
     if (m && byId[m[1]]) { state.last = byId[m[1]]; addBot([entryCard(byId[m[1]])].concat(relatedChips(byId[m[1]]))); return true; }
     return false;
   }
-  welcome();
+  disclaimer(function () { welcome(); });
   if (!showHash() && params.get("q")) ask(params.get("q"));
   window.addEventListener("hashchange", showHash);
 

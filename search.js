@@ -14,6 +14,7 @@
 
   // query-side expansion, applied to stems. Values are extra stems with lower weight.
   var SYN = {
+    pay: ["payment"], payment: ["pay"], paying: ["payment"],
     become: ["join"], sign: ["join"], enrol: ["join"], enroll: ["join"], register: ["join"],
     kid: ["youth", "leo"], child: ["youth", "leo"], children: ["youth", "leo"], teen: ["youth", "leo"], teenager: ["youth", "leo"],
     school: ["youth", "campus"], young: ["youth"],
@@ -234,11 +235,18 @@
         s += weights[t] * idf * (f * (k1 + 1)) / (f + k1 * (1 - b + b * x.len / avg));
         if (weights[t] === 1) hit++;
       });
-      return { chunk: c, score: s, coverage: hit / qt.length };
+      // how much of the question's meaning (rarer words count more; words found nowhere count most) this passage covers
+      var num = 0, den = 0, seenT = {};
+      qt.forEach(function (t) {
+        if (seenT[t]) return; seenT[t] = 1;
+        var nn = df[t] || 0, idf = Math.log(1 + (N - nn + 0.5) / (nn + 0.5));
+        den += idf; if (x.tf[t] || weights[t] > 0) num += idf;
+      });
+      return { chunk: c, score: s, coverage: hit / qt.length, wcov: den ? num / den : 0 };
     }).filter(function (r) { return r.score > 0; });
     scored.sort(function (a, b2) { return b2.score - a.score; });
     var minCov = qt.length === 1 ? 1 : qt.length === 2 ? 0.5 : 0.4;
-    var good = scored.filter(function (r) { return r.coverage >= minCov; });
+    var good = scored.filter(function (r) { return r.coverage >= minCov && (qt.length === 1 || r.wcov >= (qt.length <= 2 ? 0.6 : 0.4)); });
     return good.slice(0, n || 3).map(function (r) {
       r.excerpt = snippet({ text: r.chunk.t }, qt, 3);
       if (r.excerpt.length > 420) r.excerpt = r.excerpt.slice(0, 417).replace(/\s+\S*$/, "") + "…";

@@ -29,6 +29,7 @@
     if (open) { try { frame.focus(); } catch (e) {} }
   }
   btn.addEventListener("click", function () { toggle(); }); x.addEventListener("click", function () { toggle(false); });
+  window.addEventListener("message", function (e) { if (e.data === "lg-close" && frame && e.source === frame.contentWindow) { toggle(false); frame.remove(); frame = null; } });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape" && open) toggle(false); });
   panel.appendChild(x);
   function mount() { document.body.appendChild(panel); document.body.appendChild(btn); document.body.appendChild(tip); setTimeout(function () { if (!open) tip.style.display = "none"; }, 9000); }
