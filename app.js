@@ -53,7 +53,7 @@
 
   /* ---------- cards ---------- */
   function badge(tier) {
-    return h("span", { class: "badge " + (tier === "official" ? "official" : "affiliate"), text: tier === "official" ? "Official" : "Lions-affiliated" });
+    return h("span", { class: "badge " + (tier === "official" ? "official" : "affiliate"), text: tier === "official" ? "Official" : tier === "general" ? "General guide" : "Lions-affiliated" });
   }
   function sourcesRow(ids) {
     var seen = {}, els = [];
@@ -217,6 +217,9 @@
       if (!top && ps.length) msg.appendChild(chips(starters().slice(0, 3)));
       quick(q, msg, res, top);
       generate(q, msg, res, top, ps);
+      libLane(q, msg, !!top).then(function (n) {
+        if (!top && !ps.length && n) { var fb = msg.querySelector(".card h2"); if (fb && /couldn't find/.test(fb.textContent)) fb.closest("article").remove(); }
+      });
     });
   }
 
@@ -254,6 +257,59 @@
     var say = h("article", { class: "card gen quick" }, [h("p", { text: best.map(function (x) { return x.s; }).join(" ") })]);
     msg.insertBefore(say, msg.firstChild);
     tuck(msg, say);
+  }
+
+  /* ---------- library: every form, guide, presentation and video on the Resource Center ---------- */
+  var LIBP = null, LIBU = "https://www.lionsclubs.org/v2/resource/download/";
+  function loadLib() {
+    if (!LIBP) LIBP = fetch("library.json").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; });
+    return LIBP;
+  }
+  var TYPE_WORD = { video: "video", mp4: "video", pdf: "PDF", pptx: "Presentation", ppt: "Presentation", docx: "Word", doc: "Word", xlsx: "Excel", jpg: "Image", page: "Web page", ai: "Design file" };
+  function libSearch(lib, q, n) {
+    var qt = S.tokens(q), browse = /\b(documents?|videos?|forms?|library|downloads?|resources?|brochures?|flyers?|presentations?|applications?|guides?|handbooks?)\b/i.test(q);
+    var want = /\bvideos?\b/i.test(q) ? "video" : null;
+    var rare = qt.filter(function (t) { return !/^(document|video|form|librari|download|resourc|brochur|flyer|present|applic|guid|handbook|show|find|need|want|get|lion|club)/.test(t); });
+    var out = [];
+    lib.forEach(function (x) {
+      if (want && x.y !== "mp4") return;
+      var tt = {}, dd = {}; S.tokens(x.t).forEach(function (t) { tt[t] = 1; }); S.tokens(x.s + " " + x.c).forEach(function (t) { dd[t] = 1; });
+      var sc = 0, hit = 0; qt.forEach(function (t) { if (tt[t]) { sc += 3; hit++; } else if (dd[t]) { sc += 1; hit++; } });
+      var need = rare.length ? Math.min(rare.length, 2) : 0;
+      var rh = rare.filter(function (t) { return tt[t] || dd[t]; }).length;
+      if (sc > 0 && rh >= need && (rare.length || browse)) out.push({ x: x, sc: sc + (browse ? 0.01 : 0) });
+    });
+    out.sort(function (a, b) { return b.sc - a.sc || (b.x.d > a.x.d ? 1 : -1); });
+    return out.slice(0, n);
+  }
+  function libCard(list, title) {
+    return h("article", { class: "card lib" }, [h("span", { class: "cat", text: title || "Documents and videos" })].concat(list.map(function (r) {
+      var x = r.x || r;
+      return h("a", { class: "libitem", href: x.u || LIBU + x.i, target: "_blank", rel: "noopener" }, [
+        h("b", { text: x.t }),
+        h("div", { class: "where", text: [TYPE_WORD[x.y] || x.y, x.p ? x.p + (x.p === "1" ? " page" : " pages") : null, x.c, x.d].filter(Boolean).join(" · ") }),
+        x.s ? h("p", { text: x.s }) : null
+      ]);
+    })));
+  }
+  function libLane(q, msg, shown) {
+    return loadLib().then(function (lib) {
+      var hits = libSearch(lib, q, shown ? 3 : 5);
+      if (hits.length) { var c = libCard(hits); var rel = msg.querySelector(".chips"); if (rel) msg.insertBefore(c, rel); else msg.appendChild(c); }
+      return hits.length;
+    });
+  }
+  function openLibrary() {
+    loadLib().then(function (lib) {
+      var body = h("div", null, []), groups = {}, order = [];
+      lib.forEach(function (x) { var k = x.y === "mp4" ? "Videos" : x.y === "page" ? "Resource Center pages" : x.c.replace(/^./, function (m) { return m.toUpperCase(); }); if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(x); });
+      order.sort();
+      order.forEach(function (k) {
+        body.appendChild(h("div", { class: "grp", text: k + " (" + groups[k].length + ")" }));
+        groups[k].forEach(function (x) { body.appendChild(h("a", { class: "row", href: x.u || LIBU + x.i, target: "_blank", rel: "noopener", text: x.t })); });
+      });
+      openSheet("Library: " + lib.length + " documents, videos and pages", body);
+    });
   }
 
   /* ---------- conversational layer (optional): writes the reply from the passages the search found ---------- */
@@ -311,6 +367,11 @@
       h("p", { text: "Ask about Lions Clubs International: what it is, what Lions do, how to join, and the rules and meetings behind it. Every answer shows where it comes from." }),
       h("p", { class: "small", text: "Always confirm important decisions at lionsclubs.org." }),
       h("p", { class: "small", id: "ver", text: "Version " + (KB.meta.version || "?") + " · " + (KB.meta.build || KB.meta.built || "") }),
+      (function () {
+        var c = KB.meta.checked; if (!c) return null;
+        var days = Math.floor((Date.now() - new Date(c + "T00:00:00Z").getTime()) / 864e5), old = days > 31;
+        return h("p", { class: "small", id: "fresh", text: "Information last checked: " + c + (old ? ". This is over a month old, so please confirm important details on lionsclubs.org." : ".") });
+      })(),
       chips([{ label: "Take the 2-minute tour", primary: true, run: startTour }].concat(starters()))
     ])]);
     chat.scrollTop = 0;
@@ -362,6 +423,7 @@
     var body = h("div", null, [
       row("Take the 2-minute tour", startTour),
       row("Browse all topics", openTopics),
+      row("Library: forms, guides, videos", openLibrary),
       h("div", { class: "grp", text: "Text size" }),
       h("div", { class: "size" }, [16, 17, 19, 22].map(function (p, i) { return h("button", { type: "button", text: ["Small", "Normal", "Large", "Largest"][i], onclick: function () { setSize(p); } }); }))
     ]);

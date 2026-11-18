@@ -1,5 +1,5 @@
 /* Offline support. Shell is cached on install; documents are cached as they are opened. */
-const V = "lionsguide-20261118152231";
+const V = "lionsguide-20261118155247";
 const SHELL = ["./", "index.html", "style.css", "app.js", "search.js", "config.js", "kb.js", "docindex.json", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(V).then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => null)))).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith("lionsguide-") && k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
