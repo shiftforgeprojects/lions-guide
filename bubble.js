@@ -15,6 +15,8 @@
     "#lgb-panel.on{display:block}#lgb-panel iframe{width:100%;height:100%;border:0;display:block}" +
     "@media (max-width:560px){#lgb-panel{right:0;bottom:0;width:100%;height:100%;border-radius:0}#lgb-panel.on~#lgb-btn{display:none}#lgb-close{display:grid!important}}" +
     "#lgb-close{display:none;position:absolute;right:10px;top:10px;z-index:2;width:38px;height:38px;border-radius:50%;border:0;background:#ffcf06;color:#003c73;font:700 20px/1 system-ui;place-items:center;cursor:pointer}";
+  var bot = me && me.getAttribute("data-bottom");
+  if (bot) css.textContent += "#lgb-btn{bottom:" + bot + "px!important}#lgb-tip{bottom:" + (parseInt(bot, 10) + 12) + "px!important}";
   document.head.appendChild(css);
   var tip = document.createElement("div"); tip.id = "lgb-tip"; tip.textContent = "Ask about Lions"; 
   var panel = document.createElement("div"); panel.id = "lgb-panel"; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", "Lions Guide chat");
