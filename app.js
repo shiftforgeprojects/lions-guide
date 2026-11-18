@@ -657,7 +657,13 @@
     if (m && byId[m[1]]) { state.last = byId[m[1]]; addBot([entryCard(byId[m[1]])].concat(relatedChips(byId[m[1]]))); return true; }
     return false;
   }
-  disclaimer(function () { welcome(); });
+  disclaimer(function () {
+    welcome();
+    // On a wide screen, show the chat bubble on this same page so the site and the bubble can be compared
+    if (!/[?&]embed=1\b/.test(location.search) && !navigator.webdriver && window.innerWidth >= 900) {
+      var b = document.createElement("script"); b.src = "bubble.js"; b.defer = true; b.setAttribute("data-url", "./"); document.body.appendChild(b);
+    }
+  });
   if (!showHash() && params.get("q")) ask(params.get("q"));
   window.addEventListener("hashchange", showHash);
 
