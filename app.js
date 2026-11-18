@@ -93,18 +93,18 @@
     kids.push(h("h2", { text: e.title }));
     kids.push(h("p", { text: e.answer }));
     if (e.facts && e.facts.length) {
-      kids.push(h("details", null, [h("summary", { text: "Key facts (" + e.facts.length + ")" }),
-        h("ul", null, e.facts.map(function (f) { return h("li", { text: f }); }))]));
+      kids.push(h("div", { class: "lead", text: "Key points" }));
+      kids.push(h("ul", { class: "pts" }, e.facts.map(function (f) { return h("li", { text: f }); })));
     }
     kids.push(sourcesRow(e.src || []));
     kids.push(feedbackRow(e));
     return h("article", { class: "card" }, kids);
   }
   function relatedChips(e, skip) {
-    var list = (e.related || []).filter(function (r) { return byId[r] && r !== skip; }).slice(0, 4).map(function (r) {
-      return askChip(byId[r].questions[0]);
+    var list = (e.related || []).filter(function (r) { return byId[r] && r !== skip; }).slice(0, 8).map(function (r) {
+      return askChip(byId[r].questions[0], byId[r].title);
     });
-    return list.length ? [h("div", { class: "lead", text: "Ask next" }), chips(list)] : [];
+    return list.length ? [h("div", { class: "lead", text: "Go deeper" }), chips(list)] : [];
   }
   function passageCards(ps, bare) {
     return h(bare ? "div" : "article", { class: bare ? "" : "card" }, (bare ? [] : [h("span", { class: "cat", text: "From the documents" })]).concat(ps.map(function (p) {
@@ -175,6 +175,14 @@
       var r2 = S.search(idx, q + " " + state.last.title, { mode: state.mode });
       if (r2.confident) res = r2;
     }
+    // A reference back to the last answer ("who elects them", "and the fees?", "what about for students") is read in that topic's context.
+    if (state.last && S.tokens(q).length <= 6) {
+      var pron = /\b(them|it|they|those|these|that|this|there|their)\b/i.test(q), lead = /^\s*(and|also|what about|how about|then|so)\b/i.test(q);
+      if (pron || (lead && !res.confident)) {
+        var r3 = S.search(idx, q + " " + state.last.title, { mode: state.mode });
+        if (r3.confident || r3.tentative) res = r3;
+      }
+    }
     var msg = addBot([]);
     var top = (res.confident || res.tentative) ? res.results[0].entry : null;
     if (top) {
@@ -186,8 +194,8 @@
       msg.appendChild(entryCard(top));
       var also = res.results.slice(1, 3).filter(function (r) { return r.score > res.results[0].score * 0.6 && r.coverage >= 0.5; });
       if (also.length) {
-        msg.appendChild(h("div", { class: "lead", text: "Also relevant" }));
-        msg.appendChild(chips(also.map(function (r) { return askChip(r.entry.questions[0]); })));
+        msg.appendChild(h("div", { class: "lead", text: "Related to your question" }));
+        also.slice(0, 1).forEach(function (r) { msg.appendChild(entryCard(r.entry)); });
       }
     }
     docLane(q).then(function (ps) {
@@ -207,7 +215,82 @@
         fallbackCard(q, res.results).forEach(function (n) { msg.appendChild(n); });
       }
       if (!top && ps.length) msg.appendChild(chips(starters().slice(0, 3)));
+      quick(q, msg, res, top);
+      generate(q, msg, res, top, ps);
     });
+  }
+
+  /* ---------- free, always-on conversational reply: picks the sentences that answer the question ---------- */
+  function sentences(t) { return String(t).split(/(?<=[.!?])\s+(?=[A-Z0-9(])/).filter(function (x) { return x.length > 12; }); }
+  function tuck(msg, say) {
+    var cards = [].slice.call(msg.children).filter(function (n) { return n !== say && n.tagName === "ARTICLE" && !n.classList.contains("gen"); });
+    if (!cards.length) return;
+    var det = h("details", { class: "card docs" }, [h("summary", { text: "Full written answer and sources" })]);
+    cards[0].parentNode.insertBefore(det, cards[0]);
+    cards.forEach(function (c) { det.appendChild(c); });
+  }
+  function quick(q, msg, res, top) {
+    if (!top || !res.confident) return;
+    var qt = {}; S.tokens(q).forEach(function (t) { qt[t] = 1; });
+    var pool = [], seen = {}, df = {};
+    res.results.slice(0, 1).forEach(function (r, ri) {
+      sentences(r.entry.answer).concat(r.entry.facts || []).forEach(function (sn, i) {
+        if (seen[sn] || /^(Based on the standard|From the International|Ask 'the)/.test(sn)) return; seen[sn] = 1;
+        var set = {}; S.tokens(sn).forEach(function (t) { set[t] = 1; });
+        Object.keys(set).forEach(function (t) { df[t] = (df[t] || 0) + 1; });
+        pool.push({ s: sn, set: set, i: pool.length, ri: ri, k: i });
+      });
+    });
+    pool.forEach(function (x) {
+      var w = 0, hit = 0;
+      Object.keys(qt).forEach(function (t) { if (x.set[t]) { hit++; var idf = Math.log(1 + pool.length / df[t]); w += idf * idf; } });
+      x.hit = hit; x.w = w * 10 - x.k * 0.01;
+    });
+    if (!pool.length) return;
+    var first = pool[0], best = pool.slice().sort(function (a, b) { return b.w - a.w; }).slice(0, 2);
+    best = best.filter(function (x) { return x.hit > 0 && x.w >= best[0].w * 0.6; });
+    if (!best.length) best = [first];
+    best.sort(function (a, b) { return a.i - b.i; });
+    var say = h("article", { class: "card gen quick" }, [h("p", { text: best.map(function (x) { return x.s; }).join(" ") })]);
+    msg.insertBefore(say, msg.firstChild);
+    tuck(msg, say);
+  }
+
+  /* ---------- conversational layer (optional): writes the reply from the passages the search found ---------- */
+  state.hist = [];
+  function generate(q, msg, res, top, ps) {
+    var url = window.LION_CHAT && window.LION_CHAT.url;
+    if (!url || !navigator.onLine) return;
+    var ctx = [];
+    res.results.slice(0, 3).forEach(function (r) {
+      if (r.coverage >= 0.4 || r === res.results[0]) ctx.push({ title: r.entry.title, text: r.entry.answer + " " + (r.entry.facts || []).join(" ") });
+    });
+    ps.slice(0, 3).forEach(function (p) { ctx.push({ title: p.chunk.doc.t, text: p.excerpt }); });
+    if (!top && !ps.length) return;
+    var say = h("article", { class: "card gen" }, [h("p", { class: "typing", text: "Thinking…" })]);
+    var qk = msg.querySelector(".quick"); if (qk) qk.style.display = "none";
+    msg.insertBefore(say, msg.firstChild);
+    var t = setTimeout(function () { ctrl.abort(); }, 20000), ctrl = new AbortController();
+    fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, signal: ctrl.signal,
+      body: JSON.stringify({ q: q, history: state.hist, context: ctx }) })
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (d) {
+        clearTimeout(t);
+        if (!d.answer) throw 0;
+        say.textContent = "";
+        d.answer.split(/\n{2,}/).forEach(function (para) {
+          var lines = para.split("\n").filter(Boolean);
+          if (lines.length > 1 && lines.every(function (l) { return /^\s*([-*•]|\d+[.)])\s+/.test(l); })) {
+            say.appendChild(h("ul", { class: "pts" }, lines.map(function (l) { return h("li", { text: l.replace(/^\s*([-*•]|\d+[.)])\s+/, "") }); })));
+          } else say.appendChild(h("p", { text: para.replace(/\*\*/g, "") }));
+        });
+        state.hist.push({ role: "user", content: q }, { role: "assistant", content: d.answer });
+        state.hist = state.hist.slice(-8);
+        // tuck the written cards behind one tap so the reply reads like a conversation
+        if (qk) qk.remove();
+        say.appendChild(feedbackRow(top || { id: "gen", title: "", answer: d.answer }));
+      })
+      .catch(function () { clearTimeout(t); say.remove(); if (qk) qk.style.display = ""; });
   }
 
   function starters() {
@@ -226,7 +309,8 @@
       h("span", { class: "cat", text: "Welcome" }),
       h("h2", { text: "Understand Lionism, in plain words" }),
       h("p", { text: "Ask about Lions Clubs International: what it is, what Lions do, how to join, and the rules and meetings behind it. Every answer shows where it comes from." }),
-      h("p", { class: "small", text: "An unofficial guide. Always confirm important decisions with lionsclubs.org." }),
+      h("p", { class: "small", text: "Always confirm important decisions at lionsclubs.org." }),
+      h("p", { class: "small", id: "ver", text: "Version " + (KB.meta.version || "?") + " · " + (KB.meta.build || KB.meta.built || "") }),
       chips([{ label: "Take the 2-minute tour", primary: true, run: startTour }].concat(starters()))
     ])]);
     chat.scrollTop = 0;
@@ -291,9 +375,10 @@
   function openAbout() {
     var di = state.docIndex, n = di && di.docs ? di.docs.length : 0;
     openSheet("About this guide", h("div", null, [
-      h("p", { text: "Lions Guide is an unofficial, free study guide that helps anyone understand Lionism. It is not published or endorsed by Lions Clubs International." }),
+      h("p", { text: "Lions Guide is a free guide that helps anyone understand Lionism. It is not published by Lions Clubs International." }),
       h("p", { text: "Answers are plain-language summaries with links to where each fact comes from. A green Official badge means the page is on lionsclubs.org. An amber Lions-affiliated badge means a Lions club or district site that repeats official text. Always confirm anything important at lionsclubs.org." }),
       h("p", { text: "Created by Ln. Mukesh Kumar Pandey." }),
+      h("p", { class: "small", text: "Version " + (KB.meta.version || "?") + " (" + (KB.meta.build || "") + ")" }),
       h("p", { class: "small", text: KB.entries.length + " written answers · " + n + " documents indexed · content updated " + (KB.meta.built || "") }),
       h("p", null, [h("a", { href: "https://www.lionsclubs.org/en/member-resource-center", target: "_blank", rel: "noopener", text: "Open the official Member Resource Center" })])
     ]));
@@ -345,12 +430,12 @@
     navigator.serviceWorker.register("sw.js").catch(function () {});
   }
 
-  // Logo slot: if app/logo.svg or app/logo.png exists at build time it replaces the "L" mark.
-  if (KB.meta.logo) {
-    var mark = document.querySelector(".mark"), im = new Image(); im.alt = "Lions Clubs International logo";
-    im.onload = function () { mark.textContent = ""; mark.classList.add("has-logo"); mark.appendChild(im); };
-    im.src = KB.meta.logo;
-  }
+  // Logo: shown when logo.png loads; otherwise the "L" stays.
+  (function () {
+    var mark = document.getElementById("mark"), img = document.getElementById("logo");
+    function ok() { mark.classList.add("has-logo"); img.hidden = false; var sp = mark.querySelector("span"); if (sp) sp.hidden = true; }
+    if (img.complete && img.naturalWidth) ok(); else img.addEventListener("load", ok);
+  })();
 
   var sz = store.get("lg_size", null); if (sz) setSize(sz);
   fetch("docindex.json").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) { state.docIndex = d; }).catch(function () {});

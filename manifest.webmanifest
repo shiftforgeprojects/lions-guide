@@ -1,7 +1,7 @@
 {
   "name": "Lions Guide: understand Lionism",
   "short_name": "Lions Guide",
-  "description": "Free, unofficial plain-language guide to Lions Clubs International.",
+  "description": "Free plain-language guide to Lions Clubs International.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
