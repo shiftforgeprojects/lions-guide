@@ -481,7 +481,7 @@
     if (b) b.addEventListener("click", goBack); if (r) r.addEventListener("click", startOver);
     new MutationObserver(navState).observe(chat, { childList: true });
   })();
-  function stampVersion() { var v = document.getElementById("ver"); if (!v) return; var c = KB.meta.checked; v.textContent = "Preview version for review. Not an official Lions Clubs International product.\nv" + (KB.meta.version || "?") + (c ? "\nchecked " + c : ""); }
+  function stampVersion() { var v = document.getElementById("ver"); if (!v) return; var c = KB.meta.checked; v.textContent = "v" + (KB.meta.version || "?") + (c ? "\nchecked " + c : ""); }
   function welcome(keep) {
     stampVersion();
     if (keep !== true) chat.textContent = "";
