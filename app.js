@@ -43,6 +43,13 @@
     var m = h("div", { class: "msg bot" }, nodes);
     chat.appendChild(m);
     requestAnimationFrame(function () { m.scrollIntoView({ block: "start" }); });
+    // answers grow after they first appear (documents, details): keep the top of the answer in view for a moment, unless the reader scrolls
+    if (window.ResizeObserver) {
+      var moved = false, mark = function () { moved = true; };
+      chat.addEventListener("wheel", mark, { once: true, passive: true }); chat.addEventListener("touchmove", mark, { once: true, passive: true });
+      var ro = new ResizeObserver(function () { if (!moved && chat.lastElementChild === m) m.scrollIntoView({ block: "start" }); });
+      ro.observe(m); setTimeout(function () { ro.disconnect(); }, 4000);
+    }
     return m;
   }
   function chips(list, cls) {
@@ -459,7 +466,22 @@
     addBot([hero, why, me]);
     chat.scrollTop = 0;
   }
-  function stampVersion() { var v = document.getElementById("ver"); if (!v) return; var c = KB.meta.checked; v.textContent = "v" + (KB.meta.version || "?") + (c ? "\nchecked " + c : ""); }
+  function navState() { var b = document.getElementById("backBtn"); if (b) b.disabled = !chat.querySelector(".msg.me"); }
+  function goBack() {
+    var me = chat.querySelectorAll(".msg.me"); if (!me.length) return;
+    var node = me[me.length - 1], rm = [];
+    while (node) { rm.push(node); node = node.nextElementSibling; }
+    rm.forEach(function (n) { n.remove(); });
+    state.last = null; navState();
+    var last = chat.lastElementChild; if (last) last.scrollIntoView({ block: "start" });
+  }
+  function startOver() { chat.innerHTML = ""; state.last = null; welcome(); navState(); }
+  (function () {
+    var b = document.getElementById("backBtn"), r = document.getElementById("resetBtn");
+    if (b) b.addEventListener("click", goBack); if (r) r.addEventListener("click", startOver);
+    new MutationObserver(navState).observe(chat, { childList: true });
+  })();
+  function stampVersion() { var v = document.getElementById("ver"); if (!v) return; var c = KB.meta.checked; v.textContent = "Preview version for review. Not an official Lions Clubs International product.\nv" + (KB.meta.version || "?") + (c ? "\nchecked " + c : ""); }
   function welcome(keep) {
     stampVersion();
     if (keep !== true) chat.textContent = "";
