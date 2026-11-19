@@ -556,32 +556,28 @@
     openSheet("Browse topics", body);
   }
   function setSize(px) { document.documentElement.style.setProperty("--fs", px + "px"); store.set("lg_size", px); }
-  function openMenu() {
-    var body = h("div", null, [
-      row("Take the 2-minute tour", startTour),
-      row("Browse all topics", openTopics),
-      row("Library: forms, guides, videos", openLibrary),
-      row("Add the chat bubble to a website", function () { window.open("bubble.html", "_blank", "noopener"); }),
-      h("div", { class: "grp", text: "Text size" }),
-      h("div", { class: "size" }, [16, 17, 19, 22].map(function (p, i) { return h("button", { type: "button", text: ["Small", "Normal", "Large", "Largest"][i], onclick: function () { setSize(p); } }); }))
-    ]);
-    if (state.deferredInstall) body.appendChild(row("Install on this phone", function () { state.deferredInstall.prompt(); state.deferredInstall = null; }));
-    else if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone) body.appendChild(h("p", { class: "small", text: "To install on iPhone: tap the Share button in Safari, then Add to Home Screen." }));
-    body.appendChild(row("About this guide", openAbout));
-    body.appendChild(row("Clear conversation", welcome));
-    if (ADMIN) body.appendChild(row("Review log (admin)", openLog));
-    openSheet("Menu", body);
+  function openSize() {
+    var cur = store.get("lg_size", 17);
+    var wrap = h("div", { class: "size" }, [16, 17, 19, 22].map(function (px, n) {
+      return h("button", { type: "button", class: px === cur ? "on" : "", text: ["Small", "Normal", "Large", "Largest"][n], onclick: function () { setSize(px); closeSheet(); } });
+    }));
+    openSheet("Text size", h("div", null, [h("p", { text: "Choose the size that is easiest to read. Your choice is kept on this device." }), wrap]));
   }
   function openAbout() {
     var di = state.docIndex, n = di && di.docs ? di.docs.length : 0;
-    openSheet("About this guide", h("div", null, [
-      h("p", { text: "Lions Guide is a free guide that helps anyone understand Lionism. It is not published by Lions Clubs International." }),
-      h("p", { text: "Answers are plain-language summaries with links to where each fact comes from. A green Official badge means the page is on lionsclubs.org. An amber Lions-affiliated badge means a Lions club or district site that repeats official text. Always confirm anything important at lionsclubs.org." }),
-      h("p", { text: "Created by Ln. Mukesh Kumar Pandey." }),
-      h("p", { class: "small", text: "Version " + (KB.meta.version || "?") + " (" + (KB.meta.build || "") + ")" }),
-      h("p", { class: "small", text: KB.entries.length + " written answers · " + n + " documents indexed · content updated " + (KB.meta.built || "") }),
-      h("p", null, [h("a", { href: "https://www.lionsclubs.org/en/member-resource-center", target: "_blank", rel: "noopener", text: "Open the official Member Resource Center" })])
-    ]));
+    function sec(t, ps) { return [h("h4", { text: t })].concat([].concat(ps).map(function (x) { return typeof x === "string" ? h("p", { text: x }) : x; })); }
+    var kids = [].concat(
+      sec("What this guide is", "Lions Guide is a free, plain-language guide to Lionism. It helps new and existing members understand what Lions do, how to join, what it costs, who does what in a club, district and International, and how Lions Clubs International Foundation (LCIF) supports service. It works on a phone and keeps working offline after the first visit."),
+      [h("div", { class: "note" }, [h("p", { text: "Preview version for review. This guide is an independent project of District 317F. It is not an official product of Lions Clubs International and has not been published, endorsed or approved by it. Lions, Lions Clubs International and the Lions logo belong to Lions Clubs International and appear here only for identification." })])],
+      sec("Where the answers come from", "Answers are written in plain language from lionsclubs.org, including the Standard Club Constitution and By-Laws for FY 2026-27, together with guidance supplied by the creator. Where an answer comes from an official page, a green Official label links to that page so you can read the original."),
+      sec("How to use it", ["Ask in your own words, tap a topic, or choose I'm new to Lions or I'm a member to see questions suited to you. If the guide cannot find something, it says so rather than guessing.", "Answers are summaries. Your own club's constitution and by-laws, and the rules of your district and multiple district, may differ. For anything important, such as finances, elections, discipline or membership decisions, confirm with your club officers, your district team or lionsclubs.org."]),
+      sec("Privacy", "There is no account and no sign-up. Your questions are answered on your device and are not sent to a server. Settings such as text size and the preview access PIN are stored only on your device."),
+      sec("Created by", "Ln. Mukesh Kumar Pandey, District 317F. Please share suggestions, corrections and missing topics with the creator."),
+      sec("Version", [h("p", { class: "small", text: "Version " + (KB.meta.version || "?") + (KB.meta.built ? " \u00b7 content checked " + KB.meta.built : "") }), h("p", { class: "small", text: KB.entries.length + " written answers and " + n + " official documents searched." })]),
+      [h("p", null, [h("a", { href: "https://www.lionsclubs.org/", target: "_blank", rel: "noopener", text: "Lions Clubs International (lionsclubs.org)" })]),
+       h("p", null, [h("a", { href: "https://www.lionsclubs.org/en/member-resource-center", target: "_blank", rel: "noopener", text: "Official Member Resource Center" })])]
+    );
+    openSheet("About Lions Guide", h("div", { class: "about" }, kids));
   }
   function openLog() {
     var l = store.get("lg_log", []), un = l.filter(function (r) { return r.type === "unanswered"; });
@@ -593,6 +589,57 @@
   }
 
   /* ---------- welcome notice: shown each time the app opens ---------- */
+  /* ---------- private preview PIN (a soft lock: keeps the audience small; it is not strong security) ---------- */
+  var PIN_HASH = "e8817c36c38ca2c5003cd9f5f5ef1f1efad4b3d7ec97df894d65fa589feee09d";
+  function sha256(str) {
+    var K = [], H = [], p, c, q, i, j;
+    function isP(n) { for (var d = 2; d * d <= n; d++) if (n % d === 0) return false; return true; }
+    for (p = 2, c = 0; c < 64; p++) if (isP(p)) { if (c < 8) H[c] = (Math.pow(p, 0.5) % 1) * 4294967296 | 0; K[c++] = (Math.pow(p, 1 / 3) % 1) * 4294967296 | 0; }
+    var b = unescape(encodeURIComponent(str)), l = b.length, w = [];
+    for (i = 0; i < ((l + 72) >> 6 << 4); i++) w[i] = 0;
+    for (i = 0; i < l; i++) w[i >> 2] |= b.charCodeAt(i) << (24 - (i % 4) * 8);
+    w[l >> 2] |= 0x80 << (24 - (l % 4) * 8); w[w.length - 1] = l * 8;
+    function R(x, n) { return (x >>> n) | (x << (32 - n)); }
+    for (j = 0; j < w.length; j += 16) {
+      var W = w.slice(j, j + 16), v = H.slice(0);
+      for (i = 0; i < 64; i++) {
+        if (i >= 16) W[i] = (W[i - 16] + (R(W[i - 15], 7) ^ R(W[i - 15], 18) ^ (W[i - 15] >>> 3)) + W[i - 7] + (R(W[i - 2], 17) ^ R(W[i - 2], 19) ^ (W[i - 2] >>> 10))) | 0;
+        var t1 = (v[7] + (R(v[4], 6) ^ R(v[4], 11) ^ R(v[4], 25)) + ((v[4] & v[5]) ^ (~v[4] & v[6])) + K[i] + W[i]) | 0;
+        var t2 = ((R(v[0], 2) ^ R(v[0], 13) ^ R(v[0], 22)) + ((v[0] & v[1]) ^ (v[0] & v[2]) ^ (v[1] & v[2]))) | 0;
+        v = [(t1 + t2) | 0, v[0], v[1], v[2], (v[3] + t1) | 0, v[4], v[5], v[6]];
+      }
+      for (i = 0; i < 8; i++) H[i] = (H[i] + v[i]) | 0;
+    }
+    return H.map(function (x) { return ("00000000" + (x >>> 0).toString(16)).slice(-8); }).join("");
+  }
+  function pinGate(done) {
+    var forced = /[?&]pin=1\b/.test(location.search);
+    if (navigator.webdriver && !forced) return done();
+    try { var v = (localStorage.getItem("lg_pin") || "").split("|"); if (!forced && v[0] === PIN_HASH && Date.now() < +v[1]) return done(); } catch (e) {}
+    var input = h("input", { type: "password", inputmode: "numeric", autocomplete: "off", id: "pinIn", "aria-label": "Access PIN", placeholder: "Enter PIN" });
+    var go = h("button", { class: "btn gold", type: "button", text: "Open", id: "pinGo" });
+    var msg = h("p", { class: "pinmsg", id: "pinMsg", role: "alert" });
+    var tries = 0, lockUntil = 0;
+    var box = h("div", { class: "dbox", role: "dialog", "aria-modal": "true", "aria-labelledby": "pinTitle" }, [
+      h("img", { class: "dlogo", src: "logo.png", alt: "" }),
+      h("h2", { id: "pinTitle", text: "Private preview" }),
+      h("p", { text: "This Lions Guide preview is open to invited reviewers only. Please enter your PIN to continue." }),
+      input, msg,
+      h("div", { class: "dbtns" }, [go]),
+      h("p", { class: "small", text: "Do not have a PIN? Please contact Ln. Mukesh Kumar Pandey (District 317F) to request access." })
+    ]);
+    var ov = h("div", { class: "dover pinov", id: "pinGate" }, [box]); document.body.appendChild(ov); input.focus();
+    function tryPin() {
+      if (Date.now() < lockUntil) { msg.textContent = "Too many tries. Please wait a few seconds and try again."; return; }
+      var ok = sha256("lionguide-v1:" + input.value.replace(/\s+/g, "")) === PIN_HASH;
+      if (ok) { try { localStorage.setItem("lg_pin", PIN_HASH + "|" + (Date.now() + 7 * 864e5)); } catch (e) {} ov.remove(); setTimeout(done, 350); return; }
+      tries++; input.value = ""; msg.textContent = "That PIN is not correct. Please check it and try again, or contact Ln. Mukesh Kumar Pandey for access.";
+      if (tries % 5 === 0) lockUntil = Date.now() + 30000;
+      input.focus();
+    }
+    go.addEventListener("click", tryPin);
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); tryPin(); } });
+  }
   function disclaimer(done) {
     var embed = /[?&]embed=1\b/.test(location.search), forced = /[?&]disclaimer=1\b/.test(location.search);
     var seen = false; try { seen = sessionStorage.getItem("lg_ok") === "1"; } catch (e) {}
@@ -632,7 +679,8 @@
   input.addEventListener("input", function () { send.disabled = !input.value.trim(); });
   send.disabled = true;
   document.getElementById("topicsBtn").addEventListener("click", openTopics);
-  document.getElementById("menuBtn").addEventListener("click", openMenu);
+  document.getElementById("aboutBtn").addEventListener("click", openAbout);
+  document.getElementById("sizeBtn").addEventListener("click", openSize);
 
   var segBtns = document.querySelectorAll(".seg button");
   function paintMode() { segBtns.forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.mode === state.mode ? "true" : "false"); }); }
@@ -681,13 +729,13 @@
     if (m && byId[m[1]]) { state.last = byId[m[1]]; addBot([entryCard(byId[m[1]])].concat(relatedChips(byId[m[1]]))); return true; }
     return false;
   }
-  disclaimer(function () {
+  pinGate(function () { disclaimer(function () {
     welcome();
     // On a wide screen, show the chat bubble on this same page so the site and the bubble can be compared
     if (!/[?&]embed=1\b/.test(location.search) && !navigator.webdriver) {
       var b = document.createElement("script"); b.src = "bubble.js"; b.defer = true; b.setAttribute("data-url", "./"); if (window.innerWidth < 900) b.setAttribute("data-bottom", "92"); document.body.appendChild(b);
     }
-  });
+  }); });
   if (!showHash() && params.get("q")) ask(params.get("q"));
   window.addEventListener("hashchange", showHash);
 
