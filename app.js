@@ -567,7 +567,7 @@
     var di = state.docIndex, n = di && di.docs ? di.docs.length : 0;
     function sec(t, ps) { return [h("h4", { text: t })].concat([].concat(ps).map(function (x) { return typeof x === "string" ? h("p", { text: x }) : x; })); }
     var kids = [].concat(
-      sec("What this guide is", "Lions Guide is a free, plain-language guide to Lionism. It helps new and existing members understand what Lions do, how to join, what it costs, who does what in a club, district and International, and how Lions Clubs International Foundation (LCIF) supports service. It works on a phone and keeps working offline after the first visit."),
+      sec("What this guide is", "Lions Guide is a free, plain-language guide to Lionism. It helps new and existing members understand what Lions do, how to join, what it costs, who does what in a club, district and International, and how Lions Clubs International Foundation (LCIF) supports service. It is designed to work well on a phone."),
       [h("div", { class: "note" }, [h("p", { text: "Preview version for review. This guide is an independent project of District 317F. It is not an official product of Lions Clubs International and has not been published, endorsed or approved by it. Lions, Lions Clubs International and the Lions logo belong to Lions Clubs International and appear here only for identification." })])],
       sec("Where the answers come from", "Answers are written in plain language from lionsclubs.org, including the Standard Club Constitution and By-Laws for FY 2026-27, together with guidance supplied by the creator. Where an answer comes from an official page, a green Official label links to that page so you can read the original."),
       sec("How to use it", ["Ask in your own words, tap a topic, or choose I'm new to Lions or I'm a member to see questions suited to you. If the guide cannot find something, it says so rather than guessing.", "Answers are summaries. Your own club's constitution and by-laws, and the rules of your district and multiple district, may differ. For anything important, such as finances, elections, discipline or membership decisions, confirm with your club officers, your district team or lionsclubs.org."]),
@@ -693,10 +693,10 @@
   }
 
   window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); state.deferredInstall = e; });
-  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
-    var hadSW = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.addEventListener("controllerchange", function () { if (hadSW) location.reload(); });
-    navigator.serviceWorker.register("sw.js").catch(function () {});
+  /* No offline cache any more. Remove anything an older version installed, and check for the cleanup worker. */
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.update().catch(function () {}); }); }).catch(function () {});
+    if (window.caches) caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
   }
 
   // Logo: shown when logo.png loads; otherwise the "L" stays.
