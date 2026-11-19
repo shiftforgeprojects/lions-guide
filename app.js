@@ -592,10 +592,12 @@
   /* ---------- welcome notice: shown each time the app opens ---------- */
   /* ---------- private preview PIN (a soft lock: keeps the audience small; it is not strong security) ---------- */
   var PIN = "2846789";
+  /* Automated test browsers may skip the gates, but only on a local test address, never on the live site. */
+  var AUTO = !!navigator.webdriver && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
   function pinGate(done) {
     if (/[?&]lock=1\b/.test(location.search)) { try { localStorage.removeItem("lg_pin"); sessionStorage.removeItem("lg_ok"); } catch (e) {} }
     var forced = /[?&]pin=1\b/.test(location.search);
-    if (navigator.webdriver && !forced) return done();
+    if (AUTO && !forced) return done();
     try { var v = (localStorage.getItem("lg_pin") || "").split("|"); if (!forced && v[0] === "ok" && Date.now() < +v[1]) return done(); } catch (e) {}
     var input = h("input", { type: "password", inputmode: "numeric", autocomplete: "off", id: "pinIn", "aria-label": "Access PIN", placeholder: "Enter PIN" });
     var go = h("button", { class: "btn gold", type: "button", text: "Open", id: "pinGo" });
@@ -626,7 +628,7 @@
   function disclaimer(done) {
     var embed = /[?&]embed=1\b/.test(location.search), forced = /[?&]disclaimer=1\b/.test(location.search);
     var seen = false; try { seen = sessionStorage.getItem("lg_ok") === "1"; } catch (e) {}
-    if ((seen && !forced) || (navigator.webdriver && !forced)) return done();
+    if ((seen && !forced) || (AUTO && !forced)) return done();
     var link = function (t) { return h("a", { href: "https://www.lionsclubs.org/", target: "_blank", rel: "noopener", text: t || "www.lionsclubs.org" }); };
     var ok = h("button", { class: "btn gold", type: "button", text: "OK", id: "dOk" });
     var cancel = h("button", { class: "btn ghost", type: "button", text: "Cancel", id: "dCancel" });
@@ -715,7 +717,7 @@
   pinGate(function () { disclaimer(function () {
     welcome();
     // On a wide screen, show the chat bubble on this same page so the site and the bubble can be compared
-    if (!/[?&]embed=1\b/.test(location.search) && !navigator.webdriver) {
+    if (!/[?&]embed=1\b/.test(location.search) && !AUTO) {
       var b = document.createElement("script"); b.src = "bubble.js"; b.defer = true; b.setAttribute("data-url", "./"); if (window.innerWidth < 900) b.setAttribute("data-bottom", "92"); document.body.appendChild(b);
     }
   }); });
