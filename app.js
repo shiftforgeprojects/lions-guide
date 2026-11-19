@@ -632,7 +632,7 @@
     function tryPin() {
       if (Date.now() < lockUntil) { msg.textContent = "Too many tries. Please wait a few seconds and try again."; return; }
       var ok = sha256("lionguide-v1:" + input.value.replace(/\s+/g, "")) === PIN_HASH;
-      if (ok) { try { localStorage.setItem("lg_pin", PIN_HASH + "|" + (Date.now() + 7 * 864e5)); } catch (e) {} ov.remove(); setTimeout(done, 350); return; }
+      if (ok) { try { localStorage.setItem("lg_pin", PIN_HASH + "|" + (Date.now() + 7 * 864e5)); } catch (e) {} try { sessionStorage.removeItem("lg_ok"); } catch (e) {} ov.remove(); setTimeout(done, 350); return; }
       tries++; input.value = ""; msg.textContent = "That PIN is not correct. Please check it and try again, or contact Ln. Mukesh Kumar Pandey for access.";
       if (tries % 5 === 0) lockUntil = Date.now() + 30000;
       input.focus();
@@ -651,7 +651,7 @@
       h("img", { class: "dlogo", src: "logo.png", alt: "" }),
       h("h2", { id: "dTitle", text: "Before you begin" }),
       h("p", { text: "Welcome! Lions Guide was created to help people who are curious about Lions, and Lions members, learn about Lionism. It was developed by Ln. Mukesh Kumar Pandey (District 317F)." }),
-      h("p", {}, ["All the information, images and videos in this guide come from the official Lions Clubs International website, ", link("https://www.lionsclubs.org/"), ". They are used only to make learning about Lionism easy for everyone."]),
+      h("p", {}, ["The information, images and videos in this guide come from the official Lions Clubs International website, ", link("https://www.lionsclubs.org/"), ", together with guidance supplied by the creator. They are used only to make learning about Lionism easy for everyone. This is a preview for review and is not an official Lions Clubs International product."]),
       h("p", {}, ["If anything is unclear, or you would like to double-check a detail, please visit ", link("https://www.lionsclubs.org/"), " to confirm it. That website is always the final authority."]),
       h("p", { class: "dask", text: "Press OK to continue to the guide, or Cancel to close it." }),
       h("div", { class: "dbtns" }, [ok, cancel])
