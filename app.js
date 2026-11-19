@@ -572,6 +572,7 @@
       sec("Where the answers come from", "Answers are written in plain language from lionsclubs.org, including the Standard Club Constitution and By-Laws for FY 2026-27, together with guidance supplied by the creator. Where an answer comes from an official page, a green Official label links to that page so you can read the original."),
       sec("How to use it", ["Ask in your own words, tap a topic, or choose I'm new to Lions or I'm a member to see questions suited to you. If the guide cannot find something, it says so rather than guessing.", "Answers are summaries. Your own club's constitution and by-laws, and the rules of your district and multiple district, may differ. For anything important, such as finances, elections, discipline or membership decisions, confirm with your club officers, your district team or lionsclubs.org."]),
       sec("Privacy", "There is no account and no sign-up. Your questions are answered on your device and are not sent to a server. Settings such as text size and the preview access PIN are stored only on your device."),
+      sec("Preview access", [h("p", { text: "This preview asks for a PIN and remembers it on this device for 7 days." }), h("button", { class: "btn ghost", type: "button", id: "lockBtn", text: "Lock now (ask for the PIN again)", onclick: function () { try { localStorage.removeItem("lg_pin"); sessionStorage.removeItem("lg_ok"); } catch (e) {} location.href = location.pathname; } })]),
       sec("Created by", "Ln. Mukesh Kumar Pandey, District 317F. Please share suggestions, corrections and missing topics with the creator."),
       sec("Version", [h("p", { class: "small", text: "Version " + (KB.meta.version || "?") + (KB.meta.built ? " \u00b7 content checked " + KB.meta.built : "") }), h("p", { class: "small", text: KB.entries.length + " written answers and " + n + " official documents searched." })]),
       [h("p", null, [h("a", { href: "https://www.lionsclubs.org/", target: "_blank", rel: "noopener", text: "Lions Clubs International (lionsclubs.org)" })]),
@@ -592,9 +593,7 @@
   /* ---------- private preview PIN (a soft lock: keeps the audience small; it is not strong security) ---------- */
   var PIN_HASH = "e8817c36c38ca2c5003cd9f5f5ef1f1efad4b3d7ec97df894d65fa589feee09d";
   function sha256(str) {
-    var K = [], H = [], p, c, q, i, j;
-    function isP(n) { for (var d = 2; d * d <= n; d++) if (n % d === 0) return false; return true; }
-    for (p = 2, c = 0; c < 64; p++) if (isP(p)) { if (c < 8) H[c] = (Math.pow(p, 0.5) % 1) * 4294967296 | 0; K[c++] = (Math.pow(p, 1 / 3) % 1) * 4294967296 | 0; }
+    var K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2].map(function (x) { return x | 0; }), H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19].map(function (x) { return x | 0; }), i, j;
     var b = unescape(encodeURIComponent(str)), l = b.length, w = [];
     for (i = 0; i < ((l + 72) >> 6 << 4); i++) w[i] = 0;
     for (i = 0; i < l; i++) w[i >> 2] |= b.charCodeAt(i) << (24 - (i % 4) * 8);
@@ -613,6 +612,7 @@
     return H.map(function (x) { return ("00000000" + (x >>> 0).toString(16)).slice(-8); }).join("");
   }
   function pinGate(done) {
+    if (/[?&]lock=1\b/.test(location.search)) { try { localStorage.removeItem("lg_pin"); sessionStorage.removeItem("lg_ok"); } catch (e) {} }
     var forced = /[?&]pin=1\b/.test(location.search);
     if (navigator.webdriver && !forced) return done();
     try { var v = (localStorage.getItem("lg_pin") || "").split("|"); if (!forced && v[0] === PIN_HASH && Date.now() < +v[1]) return done(); } catch (e) {}
@@ -624,14 +624,16 @@
       h("img", { class: "dlogo", src: "logo.png", alt: "" }),
       h("h2", { id: "pinTitle", text: "Private preview" }),
       h("p", { text: "This Lions Guide preview is open to invited reviewers only. Please enter your PIN to continue." }),
-      input, msg,
+      input,
+      h("button", { class: "pinshow", type: "button", id: "pinShow", text: "Show PIN", onclick: function () { var t = input.type === "password"; input.type = t ? "text" : "password"; this.textContent = t ? "Hide PIN" : "Show PIN"; input.focus(); } }),
+      msg,
       h("div", { class: "dbtns" }, [go]),
       h("p", { class: "small", text: "Do not have a PIN? Please contact Ln. Mukesh Kumar Pandey (District 317F) to request access." })
     ]);
     var ov = h("div", { class: "dover pinov", id: "pinGate" }, [box]); document.body.appendChild(ov); input.focus();
     function tryPin() {
       if (Date.now() < lockUntil) { msg.textContent = "Too many tries. Please wait a few seconds and try again."; return; }
-      var ok = sha256("lionguide-v1:" + input.value.replace(/\s+/g, "")) === PIN_HASH;
+      var ok = sha256("lionguide-v1:" + input.value.replace(/\D+/g, "")) === PIN_HASH;
       if (ok) { try { localStorage.setItem("lg_pin", PIN_HASH + "|" + (Date.now() + 7 * 864e5)); } catch (e) {} try { sessionStorage.removeItem("lg_ok"); } catch (e) {} ov.remove(); setTimeout(done, 350); return; }
       tries++; input.value = ""; msg.textContent = "That PIN is not correct. Please check it and try again, or contact Ln. Mukesh Kumar Pandey for access.";
       if (tries % 5 === 0) lockUntil = Date.now() + 30000;
